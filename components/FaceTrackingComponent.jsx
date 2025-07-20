@@ -21,7 +21,7 @@ export default function FaceTrackingComponent() {
     const initFaceDetection = async () => {
       try {
         if (typeof window === 'undefined') return;
-        
+
         // Use WebGL if available, fallback to CPU
         try {
           await tf.setBackend('webgl');
@@ -37,10 +37,10 @@ export default function FaceTrackingComponent() {
         });
 
         streamRef.current = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: 'user', 
-            width: { ideal: 640 }, 
-            height: { ideal: 480 } 
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
           },
           audio: false
         });
@@ -59,25 +59,25 @@ export default function FaceTrackingComponent() {
         detectFaces();
       } catch (err) {
         console.error('Initialization error:', err);
-        setError(err.message.includes('WebGL') ? 
-          'WebGL is disabled in your browser. Please enable it for better performance.' : 
+        setError(err.message.includes('WebGL') ?
+          'WebGL is disabled in your browser. Please enable it for better performance.' :
           err.message);
       }
     };
 
     const detectFaces = async () => {
       if (!modelRef.current) return;
-      
+
       try {
         const predictions = await modelRef.current.estimateFaces(videoRef.current);
         const ctx = canvasRef.current.getContext('2d');
-        
+
         // Clear canvas
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        
+
         // Draw video frame
         ctx.drawImage(videoRef.current, 0, 0);
-        
+
         // Draw face landmarks if detected
         if (predictions.length > 0) {
           ctx.fillStyle = 'red';
@@ -88,14 +88,14 @@ export default function FaceTrackingComponent() {
       } catch (err) {
         console.error('Detection error:', err);
       }
-      
+
       animationFrameRef.current = requestAnimationFrame(detectFaces);
     };
 
     initFaceDetection();
 
-    const videos=JSON.parse(localStorage.getItem('R-V'))
-    if(videos){
+    const videos = JSON.parse(localStorage.getItem('R-V'))
+    if (videos) {
       setRecordedVideos(videos)
     }
 
@@ -124,26 +124,26 @@ export default function FaceTrackingComponent() {
       }
     };
 
-   mediaRecorderRef.current.onstop = async () => {
-  const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-  
-  // Convert blob to base64 for storage
-  const reader = new FileReader();
-  reader.readAsDataURL(blob);
-  reader.onloadend = () => {
-    const base64data = reader.result;
-    const newVideo = {
-      data: base64data, // Store the actual data
-      timestamp: new Date().toLocaleString()
+    mediaRecorderRef.current.onstop = async () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+
+      // Convert blob to base64 for storage
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = () => {
+        const base64data = reader.result;
+        const newVideo = {
+          data: base64data, // Store the actual data
+          timestamp: new Date().toLocaleString()
+        };
+
+        setRecordedVideos(prev => [...prev, newVideo]);
+
+        // Update localStorage
+        const existingVideos = JSON.parse(localStorage.getItem('R-V') || '[]');
+        localStorage.setItem('R-V', JSON.stringify([...existingVideos, newVideo]));
+      };
     };
-    
-    setRecordedVideos(prev => [...prev,newVideo]);
-    
-    // Update localStorage
-    const existingVideos = JSON.parse(localStorage.getItem('R-V') || '[]');
-    localStorage.setItem('R-V', JSON.stringify([...existingVideos, newVideo]));
-  };
-};
     // Don't collect data too frequently
     mediaRecorderRef.current.start(500); // Collect data every 500ms instead of 100ms
     setIsRecording(true);
@@ -157,18 +157,33 @@ export default function FaceTrackingComponent() {
   }, [isRecording]);
 
   const downloadRecording = useCallback((video, index) => {
-    const url = URL.createObjectURL(video.blob);
+    // Convert base64 data to Blob
+    const byteString = atob(video.data.split(',')[1]);
+    const mimeString = video.data.split(',')[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+
+    const blob = new Blob([ab], { type: mimeString });
+
+    // Create download link
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `face-tracking-${index}.webm`;
     document.body.appendChild(a);
     a.click();
+
+    // Clean up
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 100);
   }, []);
-
+  
   const deleteRecording = useCallback((index) => {
     setRecordedVideos(prev => {
       const newVideos = [...prev];
